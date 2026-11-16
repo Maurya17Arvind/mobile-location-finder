@@ -1,0 +1,9 @@
+Flask>=3.0
+phonenumbers>=8.13
+folium>=0.17
+geopy>=2.4
+redis>=5.0          # live sharing storage on Vercel / serverless (REDIS_URL)
+# Optional: only needed for USE_ADHOC_SSL=1 (self-signed HTTPS for phone testing)
+# pyOpenSSL>=24.0
+# Optional: production WSGI server (Linux/macOS)
+# gunicorn>=22.0

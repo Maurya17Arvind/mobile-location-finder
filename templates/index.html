@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mobile Number Location Finder</title>
+  <meta name="description" content="Look up the country, region, carrier and time zone of a phone number, and view a live GPS location shared with consent.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-page="index">
+
+<header class="app-header">
+  <div class="container text-center">
+    <div class="brand-icon"><i class="bi bi-phone-vibrate"></i></div>
+    <h1>Mobile Number Location Finder</h1>
+    <p class="lead">See the country, region, carrier and time zone encoded in a phone number. With the owner's permission, view their live GPS location.</p>
+  </div>
+</header>
+
+<main class="container app-main">
+  <div class="row justify-content-center">
+    <div class="col-lg-10 col-xl-9">
+
+      <!-- Search -->
+      <section class="card shadow-card search-card" aria-labelledby="searchTitle">
+        <div class="card-body p-4 p-md-4">
+          <h2 id="searchTitle" class="visually-hidden">Search a number</h2>
+          <form id="lookupForm" novalidate>
+            <label for="phoneInput" class="form-label fw-semibold">Mobile number</label>
+            <div class="input-group input-group-lg phone-group">
+              <select id="countrySelect" class="form-select country-select" aria-label="Country code">
+                <option value="">Loading countries…</option>
+              </select>
+              <input id="phoneInput" type="tel" class="form-control" placeholder="Enter Mobile Number"
+                     inputmode="tel" autocomplete="tel" maxlength="25" required>
+            </div>
+            <div class="form-text">Pick the country code, or type the full number starting with <code>+</code>.</div>
+            <button id="lookupBtn" type="submit" class="btn btn-primary btn-lg w-100 mt-3 btn-search">
+              <span class="spinner-border spinner-border-sm me-2" aria-hidden="true" hidden></span>
+              <i class="bi bi-search me-2 btn-icon"></i><span class="btn-label">Get Location</span>
+            </button>
+          </form>
+          <div id="errorBox" class="alert alert-danger mt-3 mb-0" role="alert" hidden>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i><span class="msg"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Loading -->
+      <div id="loadingBox" class="loading-box" hidden aria-live="polite">
+        <div class="loader-dots"><span></span><span></span><span></span></div>
+        <p class="mb-0">Analysing number…</p>
+      </div>
+
+      <!-- Results -->
+      <section id="results" class="mt-4" hidden aria-labelledby="resultsTitle">
+        <div class="section-head">
+          <h2 id="resultsTitle" class="h5 mb-0"><i class="bi bi-info-circle me-2"></i>Number details</h2>
+          <span class="badge rounded-pill badge-approx"><i class="bi bi-diagram-3 me-1"></i>Approximate metadata</span>
+        </div>
+        <div class="notice">
+          <i class="bi bi-shield-exclamation"></i>
+          <div>These details come from the number's prefix: where and by whom the number range was originally allocated.
+            They are <strong>not</strong> the phone's current location. Numbers can be ported to other carriers, and phones travel.</div>
+        </div>
+        <div id="infoCards" class="row g-3"></div>
+      </section>
+
+      <!-- Map -->
+      <section class="card shadow-card mt-4 map-card" aria-labelledby="mapTitle">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <h2 id="mapTitle" class="h6 mb-0"><i class="bi bi-map me-2"></i>Map</h2>
+          <div class="legend small">
+            <span class="legend-item"><span class="dot dot-approx"></span>Approximate area (number metadata)</span>
+            <span class="legend-item"><span class="dot dot-live"></span>Live GPS (shared with consent)</span>
+          </div>
+        </div>
+        <div id="map" role="region" aria-label="Interactive map"></div>
+        <div class="card-footer bg-white small text-muted d-flex flex-wrap justify-content-between gap-2">
+          <span id="mapNote">Enter a number to see its approximate country or region.</span>
+          <a id="foliumLink" href="#" target="_blank" rel="noopener" hidden><i class="bi bi-box-arrow-up-right me-1"></i>Open Folium map</a>
+        </div>
+      </section>
+
+      <!-- Live location (optional, consent-based) -->
+      <section id="livePanel" class="card shadow-card mt-4 live-card" aria-labelledby="liveTitle">
+        <div class="card-body p-4">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="live-icon"><i class="bi bi-broadcast"></i></div>
+            <div>
+              <h2 id="liveTitle" class="h5 mb-1">Live GPS location <span class="badge text-bg-light border fw-normal align-middle">Optional</span></h2>
+              <p class="text-muted small mb-0">Ask the phone owner to share their real location. Nothing is shared unless they open your link,
+                agree, and allow GPS access. They can stop at any time, and the link expires automatically.</p>
+            </div>
+          </div>
+
+          {% if not live_available %}
+          <div class="alert alert-warning small mb-3">
+            <i class="bi bi-database-exclamation me-1"></i>Live sharing is not set up on this server yet.
+            The site owner needs to connect a Redis database (REDIS_URL). See the README.
+          </div>
+          {% endif %}
+          <form id="liveForm" class="row g-2 align-items-end" novalidate{% if not live_available %} hidden{% endif %}>
+            <div class="col-md-5">
+              <label for="requesterName" class="form-label small fw-semibold">Your name (shown to the recipient)</label>
+              <input id="requesterName" class="form-control" maxlength="40" placeholder="e.g. Arvind" autocomplete="name" required>
+            </div>
+            <div class="col-md-3">
+              <label for="durationSelect" class="form-label small fw-semibold">Link expires after</label>
+              <select id="durationSelect" class="form-select">
+                {% for d in durations %}
+                <option value="{{ d }}" {% if d == 15 %}selected{% endif %}>{{ d }} minutes</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <button id="liveBtn" type="submit" class="btn btn-outline-primary w-100 btn-live">
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true" hidden></span>
+                <i class="bi bi-send me-1"></i>Request Live Location
+              </button>
+            </div>
+          </form>
+          <div id="liveError" class="alert alert-danger mt-3 mb-0" role="alert" hidden></div>
+
+          <div id="liveSession" class="live-session mt-3" hidden>
+            <label for="shareLink" class="form-label small fw-semibold">Send this private link to the phone owner</label>
+            <div class="input-group">
+              <input id="shareLink" class="form-control" readonly>
+              <button id="copyBtn" class="btn btn-primary" type="button"><i class="bi bi-clipboard me-1"></i>Copy</button>
+            </div>
+            <div id="httpsWarning" class="small text-warning-emphasis mt-2" hidden>
+              <i class="bi bi-exclamation-triangle me-1"></i>This link is not HTTPS. Phones only allow GPS sharing over HTTPS,
+              so use an HTTPS tunnel or deployment (see README).
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <a id="waBtn" class="btn btn-sm btn-success" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1"></i>Send via WhatsApp</a>
+              <a id="smsBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chat-text me-1"></i>Send via SMS</a>
+            </div>
+
+            <div class="live-status mt-3">
+              <span id="liveStatusBadge" class="badge rounded-pill text-bg-secondary">Waiting for recipient</span>
+              <span class="small text-muted">Expires in <strong id="liveCountdown">--:--</strong></span>
+              <button id="cancelBtn" type="button" class="btn btn-sm btn-link text-danger ms-auto p-0">Cancel request</button>
+            </div>
+            <div id="liveStatusText" class="small text-muted mt-2"></div>
+            <div id="liveDetails" class="row g-2 mt-1" hidden></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer class="app-footer text-center small text-muted">
+  Built with Flask, phonenumbers, Leaflet &amp; OpenStreetMap. Map data © OpenStreetMap contributors.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>
