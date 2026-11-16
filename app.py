@@ -69,6 +69,39 @@ if os.environ.get("TRUST_PROXY") == "1" or ON_SERVERLESS:
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+
+class _RestoreRewrittenPath:
+    """vercel.json rewrites every request to /api/index?__path=<original path>.
+
+    Vercel hands the function the rewritten path, so without this every route
+    404s. Put the original path back and drop the helper query param.
+    """
+
+    PARAM = "__path"
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        from urllib.parse import parse_qsl, urlencode
+        pairs = parse_qsl(environ.get("QUERY_STRING", ""), keep_blank_values=True)
+        original, rest = None, []
+        for key, value in pairs:
+            if key == self.PARAM and original is None:
+                original = value
+            else:
+                rest.append((key, value))
+        if original is not None:
+            # WSGI PATH_INFO is UTF-8 bytes decoded as latin-1.
+            environ["PATH_INFO"] = ("/" + original.lstrip("/")).encode("utf-8").decode("latin-1")
+            environ["SCRIPT_NAME"] = ""
+            environ["QUERY_STRING"] = urlencode(rest)
+        return self.wsgi_app(environ, start_response)
+
+
+if ON_SERVERLESS:
+    app.wsgi_app = _RestoreRewrittenPath(app.wsgi_app)
+
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 ENABLE_GEOCODING = os.environ.get("ENABLE_GEOCODING", "1") == "1"
 GEOCODER_USER_AGENT = os.environ.get(
