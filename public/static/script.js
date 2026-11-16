@@ -59,6 +59,21 @@
     return `${Math.round(s / 60)} min ago`;
   }
 
+  // Great-circle (straight-line) distance in metres between two lat/lon points.
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function formatDistance(m) {
+    if (m < 1000) return `${Math.round(m)} m`;
+    if (m < 10000) return `${(m / 1000).toFixed(2)} km`;
+    return `${Math.round(m / 1000)} km`;
+  }
+
   function addOsmTiles(map) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -302,7 +317,32 @@
       expired: 'The link has expired. Any shared location data has been deleted.',
       cancelled: 'You cancelled the request. Any shared location data has been deleted.'
     };
-    const live = { sid: null, token: null, poller: null, ticker: null, deadline: 0, fitted: false, minutes: 15, name: '' };
+    const live = { sid: null, token: null, poller: null, ticker: null, deadline: 0, fitted: false, minutes: 15, name: '', myPos: null, myWatch: null };
+    const meLayer = L.featureGroup().addTo(map);
+
+    // Track the requester's own location (their device, their browser prompt) so
+    // we can show the distance to the shared location. Optional: if they decline,
+    // everything else still works and the distance just shows "your location off".
+    function startMyLocation() {
+      if (live.myWatch !== null || !('geolocation' in navigator)) return;
+      live.myWatch = navigator.geolocation.watchPosition(
+        (pos) => {
+          live.myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          meLayer.clearLayers();
+          L.circleMarker([live.myPos.lat, live.myPos.lon],
+            { radius: 7, color: '#fff', weight: 2, fillColor: '#198754', fillOpacity: 1 })
+            .bindTooltip('You are here').addTo(meLayer);
+        },
+        () => { /* declined or unavailable: distance simply stays unknown */ },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 }
+      );
+    }
+    function stopMyLocation() {
+      if (live.myWatch !== null) navigator.geolocation.clearWatch(live.myWatch);
+      live.myWatch = null;
+      live.myPos = null;
+      meLayer.clearLayers();
+    }
 
     function setStatus(status) {
       const [text, cls] = STATUS[status] || [status, 'secondary'];
@@ -357,6 +397,7 @@
         show(liveSession);
         setStatus('pending');
         setText(statusText, 'Link created. Waiting for the recipient to open it and give consent…');
+        startMyLocation();
         live.poller = setInterval(poll, 4000);
         live.ticker = setInterval(tick, 1000);
         tick();
@@ -399,13 +440,29 @@
       L.marker(ll, { icon: liveIcon(), title: 'Live GPS location', zIndexOffset: 1000 })
         .bindPopup(`<strong>Live GPS location</strong><br>Shared with consent by the recipient<br>±${Math.round(loc.accuracy)} m · ${escapeHtml(when)}`)
         .addTo(liveLayer);
-      if (!live.fitted) { map.setView(ll, 16); live.fitted = true; }
+
+      // Distance from you (if your own location is available) to the shared point.
+      let distCard;
+      if (live.myPos) {
+        const metres = haversine(live.myPos.lat, live.myPos.lon, loc.latitude, loc.longitude);
+        L.polyline([[live.myPos.lat, live.myPos.lon], ll],
+          { color: '#198754', weight: 2, dashArray: '6 6', opacity: 0.8 })
+          .bindTooltip(`${formatDistance(metres)} away`, { sticky: true }).addTo(liveLayer);
+        distCard = buildCard({ icon: 'bi-rulers', label: 'Distance from you', value: formatDistance(metres),
+          hint: 'Straight-line distance', live: true });
+        if (!live.fitted) { map.fitBounds(L.latLngBounds([live.myPos.lat, live.myPos.lon], ll).pad(0.3)); live.fitted = true; }
+      } else {
+        distCard = buildCard({ icon: 'bi-rulers', label: 'Distance from you', value: 'Unknown',
+          hint: 'Allow your own location to see this', live: true });
+        if (!live.fitted) { map.setView(ll, 16); live.fitted = true; }
+      }
 
       const osm = `https://www.openstreetmap.org/?mlat=${loc.latitude}&mlon=${loc.longitude}#map=17/${loc.latitude}/${loc.longitude}`;
       liveDetails.replaceChildren(
+        distCard,
+        buildCard({ icon: 'bi-bullseye', label: 'Accuracy', value: `± ${Math.round(loc.accuracy)} m`, live: true }),
         buildCard({ icon: 'bi-geo-alt-fill', label: 'Latitude', value: loc.latitude.toFixed(6), mono: true, live: true }),
         buildCard({ icon: 'bi-geo-alt-fill', label: 'Longitude', value: loc.longitude.toFixed(6), mono: true, live: true }),
-        buildCard({ icon: 'bi-bullseye', label: 'Accuracy', value: `± ${Math.round(loc.accuracy)} m`, live: true }),
         buildCard({ icon: 'bi-clock-history', label: 'Last update', value: when, hint: timeAgo(loc.timestamp), live: true })
       );
       const linkCol = document.createElement('div');
@@ -422,6 +479,7 @@
     function endLive(status) {
       clearInterval(live.poller);
       clearInterval(live.ticker);
+      stopMyLocation();
       liveLayer.clearLayers();           // data is deleted on the server, so remove it here too
       liveDetails.replaceChildren();
       show(liveDetails, false);

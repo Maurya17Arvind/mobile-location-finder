@@ -153,6 +153,7 @@ body {
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
 .dot-approx { background: var(--mlf-blue); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--mlf-blue); }
 .dot-live { background: var(--mlf-live); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--mlf-live); }
+.dot-me { background: #198754; box-shadow: 0 0 0 2px #fff, 0 0 0 3px #198754; }
 
 .live-marker { background: transparent; border: 0; }
 .live-marker-dot {
