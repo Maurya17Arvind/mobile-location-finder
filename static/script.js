@@ -472,7 +472,6 @@
 
     let watchId = null, lastPos = null, lastSent = 0, sending = false, ended = false;
     let statusTimer = null, countdownTimer = null, heartbeat = null;
-    let miniMap = null, miniMarker = null, miniCircle = null;
 
     const ENDED = {
       invalid:   ['bi-x-circle text-danger', 'Link not available', 'This location-sharing link is invalid or has expired. Nothing is being shared.'],
@@ -569,12 +568,8 @@
     function onPosition(pos) {
       if (ended) return;
       hideErr();
-      if (views.sharing.hidden) {
-        view('sharing');
-        initMiniMap();
-      }
+      if (views.sharing.hidden) view('sharing');
       lastPos = pos;
-      updateMiniMap(pos);
       if (Date.now() - lastSent >= 5000) send(pos);
     }
 
@@ -615,41 +610,20 @@
         sending = false;
       }
     }
-
-    function initMiniMap() {
-      if (miniMap) return;
-      miniMap = L.map('shareMap', { zoomControl: true });
-      addOsmTiles(miniMap);
-      miniMap.setView([20, 0], 2);
-      setTimeout(() => miniMap.invalidateSize(), 50);
-    }
-
-    function updateMiniMap(pos) {
-      if (!miniMap) return;
-      const ll = [pos.coords.latitude, pos.coords.longitude];
-      const r = Math.max(pos.coords.accuracy || 0, 5);
-      if (!miniMarker) {
-        miniCircle = L.circle(ll, { radius: r, color: '#dc3545', weight: 1, fillOpacity: 0.1 }).addTo(miniMap);
-        miniMarker = L.marker(ll, { icon: liveIcon(), title: 'Your location' }).addTo(miniMap);
-        miniMap.setView(ll, 16);
-      } else {
-        miniMarker.setLatLng(ll);
-        miniCircle.setLatLng(ll).setRadius(r);
-      }
-    }
   }
 
   // ---------------------------------------------------------------- boot
   function boot() {
+    const page = document.body.dataset.page;
+    if (page === 'share') return initShare();
+    if (page !== 'index') return;
     if (typeof L === 'undefined') {
       const msg = 'The map library could not be loaded. Please check your internet connection and reload.';
-      const box = document.querySelector('#errorBox .msg') || document.querySelector('#shareError');
+      const box = document.querySelector('#errorBox .msg');
       if (box) { box.textContent = msg; (box.closest('[hidden]') || box).hidden = false; }
       return;
     }
-    const page = document.body.dataset.page;
-    if (page === 'index') initIndex();
-    else if (page === 'share') initShare();
+    initIndex();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

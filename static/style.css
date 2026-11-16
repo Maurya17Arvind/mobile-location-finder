@@ -184,7 +184,6 @@ body {
 .consent-list { list-style: none; padding: 0; margin: 0; }
 .consent-list li { display: flex; gap: .7rem; margin-bottom: .7rem; font-size: .92rem; }
 .consent-list i { flex: 0 0 auto; margin-top: .1rem; font-size: 1.05rem; color: var(--mlf-blue); }
-.share-map { height: 240px; border-radius: .8rem; overflow: hidden; background: #eaf1fb; }
 .sharing-indicator { display: flex; align-items: center; gap: .6rem; font-size: 1.05rem; color: #b02a37; }
 .pulse-dot { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--mlf-live); }
 .pulse-dot::after {
