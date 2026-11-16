@@ -354,11 +354,18 @@
       [nameInput, durationSelect, liveBtn].forEach((el) => { el.disabled = !on; });
     }
 
+    function durationText(min) {
+      if (min < 60) return `${min} minutes`;
+      if (min === 1440) return 'up to 24 hours';
+      const h = min / 60;
+      return `${Number.isInteger(h) ? h : h.toFixed(0)} hour${h === 1 ? '' : 's'}`;
+    }
+
     function updateShareButtons() {
       if (!live.sid) return;
       const url = shareLink.value;
       const msg = `Hi, this is ${live.name}. I'd like to see your live location. You can choose whether to share it ` +
-        `using this private link (it expires in ${live.minutes} minutes): ${url}`;
+        `using this private link (it expires in ${durationText(live.minutes)}): ${url}`;
       const n = lastLookup && lastLookup.number;
       if (n && n.is_valid) {
         waBtn.href = `https://wa.me/${n.e164_format.replace('+', '')}?text=${encodeURIComponent(msg)}`;

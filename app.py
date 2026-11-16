@@ -107,7 +107,23 @@ ENABLE_GEOCODING = os.environ.get("ENABLE_GEOCODING", "1") == "1"
 GEOCODER_USER_AGENT = os.environ.get(
     "GEOCODER_USER_AGENT", "mobile-number-location-finder/1.0 (local app)")
 
-SHARE_DURATIONS = (5, 15, 30, 60)       # minutes the requester may choose
+SHARE_DURATIONS = (5, 15, 30, 60, 120, 240, 480, 720, 1440)  # minutes the requester may choose
+DEFAULT_DURATION = 60                   # pre-selected option
+
+
+def duration_label(minutes: int) -> str:
+    if minutes < 60:
+        return f"{minutes} minutes"
+    hours = minutes / 60
+    if minutes == 1440:
+        return "Until stopped (max 24 hours)"
+    h = int(hours) if hours.is_integer() else hours
+    return f"{h} hour" + ("s" if h != 1 else "")
+
+
+def duration_options() -> list[dict]:
+    return [{"value": m, "label": duration_label(m), "selected": m == DEFAULT_DURATION}
+            for m in SHARE_DURATIONS]
 ENDED_SESSION_GRACE = 10 * 60           # seconds a data-less tombstone is kept
 MAX_ACTIVE_SESSIONS = 500
 ACTIVE_STATUSES = ("pending", "sharing")
@@ -611,7 +627,7 @@ def api_error(message: str, http_status: int, **extra):
 # --------------------------------------------------------------------------
 @app.get("/")
 def index():
-    return render_template("index.html", durations=SHARE_DURATIONS,
+    return render_template("index.html", durations=duration_options(),
                            live_available=LIVE_SHARING_AVAILABLE)
 
 
@@ -731,7 +747,7 @@ def api_share_create():
     if len(requester) < 2:
         return api_error("Please enter your name so the recipient knows who is asking.", 400)
     try:
-        minutes = int(data.get("duration", 15))
+        minutes = int(data.get("duration", DEFAULT_DURATION))
     except (TypeError, ValueError):
         minutes = -1
     if minutes not in SHARE_DURATIONS:

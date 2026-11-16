@@ -114,7 +114,7 @@
               <label for="durationSelect" class="form-label small fw-semibold">Link expires after</label>
               <select id="durationSelect" class="form-select">
                 {% for d in durations %}
-                <option value="{{ d }}" {% if d == 15 %}selected{% endif %}>{{ d }} minutes</option>
+                <option value="{{ d.value }}" {% if d.selected %}selected{% endif %}>{{ d.label }}</option>
                 {% endfor %}
               </select>
             </div>
